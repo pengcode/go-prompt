@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/c-bata/go-prompt/internal/debug"
+	"github.com/pengcode/go-prompt/internal/debug"
 )
 
 const (
