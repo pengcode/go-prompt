@@ -23,14 +23,16 @@ var (
 
 // Suggest is printed when completing.
 type Suggest struct {
-	Text        string
-	Description string
+	Text           string
+	Description    string
+	MatchedIndexes []int
 }
 
 // CompletionManager manages which suggestion is now selected.
 type CompletionManager struct {
 	selected  int // -1 means nothing one is selected.
 	tmp       []Suggest
+	C         chan []Suggest
 	max       uint16
 	completer Completer
 
@@ -64,10 +66,17 @@ func (c *CompletionManager) Reset() {
 	return
 }
 
-// Update to update the suggestions.
+// Update to update the suggestions asynchronously.
 func (c *CompletionManager) Update(in Document) {
-	c.tmp = c.completer(in)
-	return
+	go func() {
+		tmp := c.completer(in)
+		c.C <- tmp
+	}()
+}
+
+// UpdateTmp to update the suggestions.
+func (c *CompletionManager) UpdateTmp(tmp []Suggest) {
+	c.tmp = tmp
 }
 
 // Previous to select the previous suggestion item.
@@ -177,7 +186,21 @@ func formatSuggestions(suggests []Suggest, max int) (new []Suggest, width int) {
 	right, rightWidth := formatTexts(right, max-leftWidth, rightPrefix, rightSuffix)
 
 	for i := 0; i < num; i++ {
-		new[i] = Suggest{Text: left[i], Description: right[i]}
+		matchedIdx := make([]int, len(suggests[i].MatchedIndexes))
+		for j := range matchedIdx {
+			if suggests[i].MatchedIndexes[j] < len(suggests[i].Text) {
+				matchedIdx[j] = len(leftPrefix) + suggests[i].MatchedIndexes[j]
+			} else {
+				// beyond the scope of Text
+				offset := suggests[i].MatchedIndexes[j] - len(suggests[i].Text)
+				matchedIdx[j] = leftWidth + offset
+			}
+		}
+		new[i] = Suggest{Text: left[i], Description: right[i], MatchedIndexes: matchedIdx}
+		//log.Printf("%d,%d)%s %d,%d)%s %v\n",
+		//	len(new[i].Text), leftWidth, new[i].Text,
+		//	len(new[i].Description), rightWidth, new[i].Description,
+		//	new[i].MatchedIndexes)
 	}
 	return new, leftWidth + rightWidth
 }
@@ -186,6 +209,7 @@ func formatSuggestions(suggests []Suggest, max int) (new []Suggest, width int) {
 func NewCompletionManager(completer Completer, max uint16) *CompletionManager {
 	return &CompletionManager{
 		selected:  -1,
+		C:         make(chan []Suggest, 128),
 		max:       max,
 		completer: completer,
 

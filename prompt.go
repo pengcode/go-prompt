@@ -8,6 +8,10 @@ import (
 	"github.com/c-bata/go-prompt/internal/debug"
 )
 
+const (
+	updateDelay = 50 * time.Millisecond
+)
+
 // Executor is called when user input something text.
 type Executor func(string)
 
@@ -39,8 +43,9 @@ func (p *Prompt) Run() {
 	p.setUp()
 	defer p.tearDown()
 
-	if p.completion.showAtStart {
-		p.completion.Update(*p.buf.Document())
+	updateT := time.NewTimer(updateDelay)
+	if !p.completion.showAtStart {
+		updateT.Stop()
 	}
 
 	p.renderer.Render(p.buf, p.completion)
@@ -72,17 +77,21 @@ func (p *Prompt) Run() {
 				debug.AssertNoError(p.in.TearDown())
 				p.executor(e.input)
 
-				p.completion.Update(*p.buf.Document())
+				updateT.Reset(updateDelay)
 				p.renderer.Render(p.buf, p.completion)
-
 				// Set raw mode
 				debug.AssertNoError(p.in.Setup())
 				go p.readBuffer(bufCh, stopReadBufCh)
 				go p.handleSignals(exitCh, winSizeCh, stopHandleSignalCh)
 			} else {
-				p.completion.Update(*p.buf.Document())
+				updateT.Reset(updateDelay)
 				p.renderer.Render(p.buf, p.completion)
 			}
+		case <-updateT.C:
+			p.completion.Update(*p.buf.Document())
+		case tmp := <-p.completion.C:
+			p.completion.UpdateTmp(tmp)
+			p.renderer.Render(p.buf, p.completion)
 		case w := <-winSizeCh:
 			p.renderer.UpdateWinSize(w)
 			p.renderer.Render(p.buf, p.completion)

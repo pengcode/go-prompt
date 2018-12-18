@@ -131,22 +131,43 @@ func (r *Render) renderCompletion(buf *Buffer, completions *CompletionManager) {
 	}
 
 	selected := completions.selected - completions.verticalScroll
+	var suggestionTextColor, suggestionBGColor Color
+	var descriptionTextColor, descriptionBGColor Color
 	r.out.SetColor(White, Cyan, false)
 	for i := 0; i < windowHeight; i++ {
 		r.out.CursorDown(1)
 		if i == selected {
-			r.out.SetColor(r.selectedSuggestionTextColor, r.selectedSuggestionBGColor, true)
+			suggestionTextColor = r.selectedSuggestionTextColor
+			suggestionBGColor = r.selectedSuggestionBGColor
+			descriptionTextColor = r.selectedDescriptionTextColor
+			descriptionBGColor = r.selectedDescriptionBGColor
 		} else {
-			r.out.SetColor(r.suggestionTextColor, r.suggestionBGColor, false)
+			suggestionTextColor = r.suggestionTextColor
+			suggestionBGColor = r.suggestionBGColor
+			descriptionTextColor = r.descriptionTextColor
+			descriptionBGColor = r.descriptionBGColor
 		}
-		r.out.WriteStr(formatted[i].Text)
 
-		if i == selected {
-			r.out.SetColor(r.selectedDescriptionTextColor, r.selectedDescriptionBGColor, false)
-		} else {
-			r.out.SetColor(r.descriptionTextColor, r.descriptionBGColor, false)
+		for j := 0; j < len(formatted[i].Text); j++ {
+			if contains(j, formatted[i].MatchedIndexes) {
+				r.out.SetColor(suggestionTextColor, Cyan, true)
+				r.out.WriteStr(string(formatted[i].Text[j]))
+				r.out.SetColor(suggestionTextColor, suggestionBGColor, false)
+			} else {
+				r.out.SetColor(suggestionTextColor, suggestionBGColor, false)
+				r.out.WriteStr(string(formatted[i].Text[j]))
+			}
 		}
-		r.out.WriteStr(formatted[i].Description)
+		for j := 0; j < len(formatted[i].Description); j++ {
+			if contains(j+len(formatted[i].Text), formatted[i].MatchedIndexes) {
+				r.out.SetColor(descriptionTextColor, Cyan, true)
+				r.out.WriteStr(string(formatted[i].Description[j]))
+				r.out.SetColor(descriptionTextColor, descriptionBGColor, false)
+			} else {
+				r.out.SetColor(descriptionTextColor, descriptionBGColor, false)
+				r.out.WriteStr(string(formatted[i].Description[j]))
+			}
+		}
 
 		if isScrollThumb(i) {
 			r.out.SetColor(DefaultColor, r.scrollbarThumbColor, false)
@@ -284,4 +305,13 @@ func clamp(high, low, x float64) float64 {
 	default:
 		return x
 	}
+}
+
+func contains(needle int, haystack []int) bool {
+	for _, i := range haystack {
+		if needle == i {
+			return true
+		}
+	}
+	return false
 }
